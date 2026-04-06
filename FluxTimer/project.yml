@@ -1,0 +1,46 @@
+name: FluxTimer
+options:
+  bundleIdPrefix: com.fluxtimer
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+targets:
+  FluxTimer:
+    type: application
+    platform: macOS
+    sources:
+      - path: FluxTimer
+        excludes:
+          - "*.entitlements"
+    settings:
+      base:
+        PRODUCT_NAME: Flux Timer
+        PRODUCT_BUNDLE_IDENTIFIER: com.fluxtimer.app
+        INFOPLIST_FILE: FluxTimer/Info.plist
+        CODE_SIGN_ENTITLEMENTS: FluxTimer/FluxTimer.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        COMBINE_HIDPI_IMAGES: YES
+    entitlements:
+      path: FluxTimer/FluxTimer.entitlements
+
+  FluxMCPServer:
+    type: tool
+    platform: macOS
+    sources:
+      - path: FluxMCPServer
+    settings:
+      base:
+        PRODUCT_NAME: flux-mcp-server
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        SWIFT_VERSION: "5.9"
