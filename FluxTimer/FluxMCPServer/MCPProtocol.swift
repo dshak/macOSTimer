@@ -226,5 +226,11 @@ let mcpResourceDefinitions: [[String: Any]] = [
         "name": "Active Timers",
         "description": "Live list of all active timers with full state",
         "mimeType": "application/json"
+    ],
+    [
+        "uri": "flux://settings",
+        "name": "App Settings",
+        "description": "Current Flux Timer settings (theme, font, palette, alerts defaults, snap config)",
+        "mimeType": "application/json"
     ]
 ]

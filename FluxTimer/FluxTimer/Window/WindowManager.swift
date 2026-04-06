@@ -18,13 +18,22 @@ class WindowManager: ObservableObject {
         duration: TimeInterval = 1800,
         label: String = ""
     ) -> TimerModel {
-        let model = TimerModel(mode: mode, duration: duration, label: label)
+        let s = AppSettings.shared
+        let model = TimerModel(
+            mode: mode,
+            duration: duration,
+            label: label,
+            alerts: s.defaultAlerts,
+            palette: s.defaultPalette
+        )
+        model.themeMode = s.defaultTheme
         let engine = TimerEngine(model: model)
 
         let windowSize = NSSize(width: 240, height: model.state == .setup ? 220 : 120)
         let origin = nextWindowOrigin(size: windowSize)
         let window = TimerWindow(contentRect: NSRect(origin: origin, size: windowSize))
         window.snapManager = snapManager
+        window.level = s.alwaysOnTop ? .floating : .normal
 
         let timerView = TimerView(
             model: model,

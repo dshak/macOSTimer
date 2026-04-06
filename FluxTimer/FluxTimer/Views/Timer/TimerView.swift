@@ -6,6 +6,7 @@ struct TimerView: View {
     let onNewTimer: () -> Void
     let onClose: () -> Void
 
+    @ObservedObject private var settings = AppSettings.shared
     @State private var isHovered = false
     @State private var flashOpacity: Double = 0
     @State private var urgencyScale: CGFloat = 1.0
@@ -109,6 +110,7 @@ struct TimerView: View {
             }
         }
         .frame(width: 240, height: model.state == .setup ? 220 : 120)
+        .opacity(settings.windowOpacity)
         .shadow(color: .black.opacity(model.themeMode == .glass ? 0.2 : 0.35), radius: 16, y: 6)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.2)) {
@@ -186,6 +188,10 @@ struct TimerView: View {
         Button("Edit Label...") {
             editLabelText = model.label
             isEditingLabel = true
+        }
+
+        Button("Preferences...") {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         }
     }
 

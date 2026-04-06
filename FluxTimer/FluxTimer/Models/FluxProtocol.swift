@@ -37,6 +37,7 @@ enum FluxAction: String {
     case list
     case update
     case history
+    case settings
 }
 
 let fluxSocketPath = "/tmp/flux-timer.sock"

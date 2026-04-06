@@ -13,6 +13,8 @@ class ResourceHandler {
             return handleHistory()
         case "flux://timers":
             return handleTimers()
+        case "flux://settings":
+            return handleSettings()
         default:
             return ["error": "Unknown resource: \(uri)"]
         }
@@ -42,6 +44,33 @@ class ResourceHandler {
                 ]
             }
             return ["contents": [["uri": "flux://history", "mimeType": "application/json", "text": "[]"]]]
+        } catch {
+            return ["error": error.localizedDescription]
+        }
+    }
+
+    private func handleSettings() -> Any {
+        let request = FluxMCPRequest(
+            id: UUID().uuidString,
+            action: "settings",
+            timerId: nil,
+            params: nil
+        )
+
+        do {
+            let response = try client.send(request: request)
+            if response.success, let dataString = response.data {
+                return [
+                    "contents": [
+                        [
+                            "uri": "flux://settings",
+                            "mimeType": "application/json",
+                            "text": dataString
+                        ]
+                    ]
+                ]
+            }
+            return ["contents": [["uri": "flux://settings", "mimeType": "application/json", "text": "{}"]]]
         } catch {
             return ["error": error.localizedDescription]
         }

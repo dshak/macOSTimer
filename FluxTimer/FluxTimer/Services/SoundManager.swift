@@ -6,8 +6,8 @@ class SoundManager {
     private var player: AVAudioPlayer?
 
     func playCompletionSound() {
-        // Use system sound "Glass" as default — ships with macOS
-        if let sound = NSSound(named: "Glass") {
+        let soundName = AppSettings.shared.alertSoundName
+        if let sound = NSSound(named: NSSound.Name(soundName)) {
             sound.play()
         }
     }

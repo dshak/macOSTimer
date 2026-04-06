@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TimerDisplayView: View {
     @ObservedObject var model: TimerModel
+    @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         let t = model.displayTime
@@ -18,13 +19,21 @@ struct TimerDisplayView: View {
             FlipDigitPair(value: minutes, padded: true)
             AnimatedSeparator(isRunning: model.state == .running)
             FlipDigitPair(value: seconds, padded: true)
+
+            // Centiseconds (optional)
+            if settings.showCentiseconds && model.state == .running {
+                let centis = Int((t - floor(t)) * 100)
+                Text(".")
+                    .opacity(0.5)
+                Text(String(format: "%02d", centis))
+                    .font(settings.timerFont.font(size: settings.fontSize * 0.45))
+            }
         }
-        .font(.system(size: 42, weight: .heavy, design: .rounded))
-        .monospacedDigit()
+        .font(settings.timerFont.font(size: settings.fontSize))
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
         // Pause blink
-        .opacity(model.state == .paused ? (blinkOpacity) : 1.0)
+        .opacity(model.state == .paused ? blinkOpacity : 1.0)
         .animation(.easeInOut(duration: 0.4).repeatForever(autoreverses: true), value: model.state == .paused)
     }
 
@@ -50,12 +59,10 @@ private struct FlipDigitPair: View {
             .opacity(opacity)
             .onChange(of: value) { oldVal, newVal in
                 guard oldVal != newVal else { return }
-                // Slide old value up and fade out
                 withAnimation(.easeIn(duration: 0.1)) {
                     offset = -6
                     opacity = 0.3
                 }
-                // After a brief moment, snap to new value and slide in from below
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     displayValue = newVal
                     offset = 6

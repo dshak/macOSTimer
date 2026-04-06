@@ -20,17 +20,19 @@ struct TimerSetupView: View {
             }
 
             if model.mode == .countdown {
-                // Presets
-                HStack(spacing: 8) {
-                    ForEach(TimerPreset.builtIn) { preset in
-                        PresetPill(
-                            label: preset.label,
-                            isSelected: model.configuredDuration == preset.duration,
-                            action: {
-                                model.configuredDuration = preset.duration
-                                updatePickerFromDuration(preset.duration)
-                            }
-                        )
+                // Presets (built-in + custom, scrollable)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(AppSettings.shared.allPresets) { preset in
+                            PresetPill(
+                                label: preset.label,
+                                isSelected: model.configuredDuration == preset.duration,
+                                action: {
+                                    model.configuredDuration = preset.duration
+                                    updatePickerFromDuration(preset.duration)
+                                }
+                            )
+                        }
                     }
                 }
 

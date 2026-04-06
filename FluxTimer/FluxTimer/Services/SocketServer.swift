@@ -295,6 +295,16 @@ class SocketServer {
                 return dict
             }
             return .ok(id: request.id, data: ["history": recordDicts])
+
+        case .settings:
+            var resultData: [String: Any] = [:]
+            let semaphore = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                resultData = AppSettings.shared.toJSON()
+                semaphore.signal()
+            }
+            semaphore.wait()
+            return .ok(id: request.id, data: resultData)
         }
     }
 }

@@ -28,17 +28,29 @@ class StatusBarController {
 
     private func updateDisplay() {
         guard let wm = windowManager else { return }
+        let settings = AppSettings.shared
         let running = wm.timers.filter { $0.model.state == .running }
 
         if let button = statusItem.button {
-            if running.isEmpty {
+            switch settings.menuBarDisplay {
+            case .iconOnly:
                 button.title = ""
-            } else if running.count == 1 {
-                button.title = " \(running[0].model.shortFormattedTime)"
-            } else if running.count == 2 {
-                button.title = " \(running[0].model.shortFormattedTime) | \(running[1].model.shortFormattedTime)"
-            } else {
-                button.title = " \(running.count) timers"
+            case .mostRecent:
+                if let last = running.last {
+                    button.title = " \(last.model.shortFormattedTime)"
+                } else {
+                    button.title = ""
+                }
+            case .allTimers:
+                if running.isEmpty {
+                    button.title = ""
+                } else if running.count == 1 {
+                    button.title = " \(running[0].model.shortFormattedTime)"
+                } else if running.count == 2 {
+                    button.title = " \(running[0].model.shortFormattedTime) | \(running[1].model.shortFormattedTime)"
+                } else {
+                    button.title = " \(running.count) timers"
+                }
             }
         }
 
@@ -81,6 +93,12 @@ class StatusBarController {
 
         menu.addItem(.separator())
 
+        let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(preferencesClicked), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+
+        menu.addItem(.separator())
+
         let quitItem = NSMenuItem(title: "Quit Flux", action: #selector(quitClicked), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
@@ -95,6 +113,11 @@ class StatusBarController {
 
     @objc private func newTimerClicked() {
         windowManager?.createTimerAndShow()
+    }
+
+    @objc private func preferencesClicked() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func quitClicked() {
