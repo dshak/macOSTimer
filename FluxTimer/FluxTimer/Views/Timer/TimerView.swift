@@ -161,25 +161,29 @@ struct TimerView: View {
     @ViewBuilder
     private var contextMenuContent: some View {
         // Theme toggle
-        Menu("Theme") {
-            Button(model.themeMode == .gradient ? "* Gradient" : "Gradient") {
+        Picker("Theme", selection: Binding(
+            get: { model.themeMode },
+            set: { newValue in
                 withAnimation(.easeInOut(duration: 0.4)) {
-                    model.themeMode = .gradient
+                    model.themeMode = newValue
                 }
             }
-            Button(model.themeMode == .glass ? "* Glass" : "Glass") {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    model.themeMode = .glass
-                }
-            }
+        )) {
+            Text("Gradient").tag(ThemeMode.gradient)
+            Text("Glass").tag(ThemeMode.glass)
         }
 
         // Palette picker
-        Menu("Palette") {
-            ForEach(GradientPalette.all) { palette in
-                Button(palette.id == model.palette.id ? "* \(palette.name)" : palette.name) {
-                    model.palette = palette
+        Picker("Palette", selection: Binding(
+            get: { model.palette.id },
+            set: { newId in
+                if let p = GradientPalette.all.first(where: { $0.id == newId }) {
+                    model.palette = p
                 }
+            }
+        )) {
+            ForEach(GradientPalette.all) { palette in
+                Text(palette.name).tag(palette.id)
             }
         }
 
