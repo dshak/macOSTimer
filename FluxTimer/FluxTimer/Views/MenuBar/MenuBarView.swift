@@ -1,13 +1,15 @@
 import AppKit
+import SwiftUI
 import Combine
 
-class StatusBarController {
-    private var statusItem: NSStatusItem
+class StatusBarController: NSObject {
+    private var statusItem: NSStatusItem!
     private var updateTimer: Timer?
     private weak var windowManager: WindowManager?
 
     init(windowManager: WindowManager) {
         self.windowManager = windowManager
+        super.init()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
@@ -116,7 +118,27 @@ class StatusBarController {
     }
 
     @objc private func preferencesClicked() {
-        (NSApp.delegate as? AppDelegate)?.showSettings()
+        print("[MenuBar] preferencesClicked, delegate type: \(type(of: NSApp.delegate))")
+        if let appDelegate = NSApp.delegate as? AppDelegate {
+            appDelegate.showSettings()
+        } else {
+            // Fallback — find AppDelegate through the adaptor
+            print("[MenuBar] AppDelegate cast failed, trying direct call")
+            let settingsView = SettingsView()
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 420, height: 380),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Flux Timer Settings"
+            window.contentView = NSHostingView(rootView: settingsView)
+            window.center()
+            window.isReleasedWhenClosed = false
+            window.level = .floating
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     @objc private func quitClicked() {

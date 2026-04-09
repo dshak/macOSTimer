@@ -166,10 +166,6 @@ struct TimerView: View {
             editLabelText = model.label
             isEditingLabel = true
         }
-
-        Button("Preferences...") {
-            (NSApp.delegate as? AppDelegate)?.showSettings()
-        }
     }
 
     private func triggerFlash() {
