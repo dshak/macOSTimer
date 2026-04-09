@@ -5,24 +5,30 @@ struct TimerDisplayView: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        let t = model.displayTime
-        let hours = Int(t) / 3600
-        let minutes = (Int(t) % 3600) / 60
-        let seconds = Int(t) % 60
+        // Derive display from the published displaySeconds (triggers view updates only when second changes)
+        let total = model.displaySeconds
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
 
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             if hours > 0 {
-                FlipDigitPair(value: hours, padded: false)
+                if hours >= 10 {
+                    FlipDigit(digit: hours / 10)
+                }
+                FlipDigit(digit: hours % 10)
                 AnimatedSeparator(isRunning: model.state == .running)
             }
 
-            FlipDigitPair(value: minutes, padded: true)
+            FlipDigit(digit: minutes / 10)
+            FlipDigit(digit: minutes % 10)
             AnimatedSeparator(isRunning: model.state == .running)
-            FlipDigitPair(value: seconds, padded: true)
+            FlipDigit(digit: seconds / 10)
+            FlipDigit(digit: seconds % 10)
 
-            // Centiseconds (optional)
+            // Centiseconds (optional, uses displayTime for sub-second precision)
             if settings.showCentiseconds && model.state == .running {
-                let centis = Int((t - floor(t)) * 100)
+                let centis = Int((model.displayTime - floor(model.displayTime)) * 100)
                 Text(".")
                     .opacity(0.5)
                 Text(String(format: "%02d", centis))
@@ -32,48 +38,53 @@ struct TimerDisplayView: View {
         .font(settings.timerFont.font(size: settings.fontSize))
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-        // Pause blink
-        .opacity(model.state == .paused ? blinkOpacity : 1.0)
-        .animation(.easeInOut(duration: 0.4).repeatForever(autoreverses: true), value: model.state == .paused)
+        // Pause blink — only animate opacity when paused
+        .opacity(blinkOpacity)
+        .onChange(of: model.state, initial: true) { _, newState in
+            if newState == .paused {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+                    blinkOpacity = 0.3
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    blinkOpacity = 1.0
+                }
+            }
+        }
     }
 
-    @State private var blinkOpacity: Double = 0.3
+    @State private var blinkOpacity: Double = 1.0
 }
 
-/// A digit pair that animates (slides up) when the value changes
-private struct FlipDigitPair: View {
-    let value: Int
-    let padded: Bool
+/// A single digit that animates (slides up) only when its value changes
+private struct FlipDigit: View {
+    let digit: Int
 
-    @State private var displayValue: Int = -1
+    @State private var displayDigit: Int = -1
     @State private var offset: CGFloat = 0
-    @State private var opacity: Double = 1.0
-
-    var text: String {
-        padded ? String(format: "%02d", displayValue < 0 ? value : displayValue) : "\(displayValue < 0 ? value : displayValue)"
-    }
+    @State private var digitOpacity: Double = 1.0
 
     var body: some View {
-        Text(text)
+        Text("\(displayDigit < 0 ? digit : displayDigit)")
             .offset(y: offset)
-            .opacity(opacity)
-            .onChange(of: value) { oldVal, newVal in
+            .opacity(digitOpacity)
+            .onChange(of: digit) { oldVal, newVal in
                 guard oldVal != newVal else { return }
                 withAnimation(.easeIn(duration: 0.1)) {
                     offset = -6
-                    opacity = 0.3
+                    digitOpacity = 0.3
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    displayValue = newVal
+                    displayDigit = newVal
                     offset = 6
                     withAnimation(.easeOut(duration: 0.1)) {
                         offset = 0
-                        opacity = 1.0
+                        digitOpacity = 1.0
                     }
                 }
             }
             .onAppear {
-                displayValue = value
+                displayDigit = digit
             }
     }
 }

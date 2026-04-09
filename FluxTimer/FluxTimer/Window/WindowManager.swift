@@ -47,6 +47,9 @@ class WindowManager: ObservableObject {
         )
 
         window.contentView = NSHostingView(rootView: timerView)
+        window.onCloseAction = { [weak self] in
+            self?.closeTimer(id: model.id.uuidString)
+        }
 
         // Track state changes to resize window
         model.$state
@@ -81,12 +84,24 @@ class WindowManager: ObservableObject {
     }
 
     func closeTimer(id: String) {
-        guard let index = timers.firstIndex(where: { $0.model.id.uuidString == id }) else { return }
+        print("[WindowManager] closeTimer called for \(id), timer count: \(timers.count)")
+        guard let index = timers.firstIndex(where: { $0.model.id.uuidString == id }) else {
+            print("[WindowManager] timer not found!")
+            return
+        }
         let instance = timers[index]
         instance.engine.stop()
         snapManager.unregister(instance.window)
+        instance.window.cleanup()
         instance.window.close()
         timers.remove(at: index)
+        print("[WindowManager] timer removed, remaining: \(timers.count)")
+
+        if timers.isEmpty {
+            print("[WindowManager] last timer closed, exiting")
+            SocketServer.shared.shutdown()
+            exit(0)
+        }
     }
 
     func engine(for timerId: String) -> TimerEngine? {

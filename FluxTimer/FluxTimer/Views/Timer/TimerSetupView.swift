@@ -38,11 +38,11 @@ struct TimerSetupView: View {
 
                 // Time picker
                 HStack(spacing: 4) {
-                    TimeWheel(label: "h", value: $hours, range: 0...23)
+                    DragDigit(label: "h", value: $hours, range: 0...23)
                     Text(":").foregroundStyle(.white.opacity(0.6)).font(.title2.weight(.bold))
-                    TimeWheel(label: "m", value: $minutes, range: 0...59)
+                    DragDigit(label: "m", value: $minutes, range: 0...59)
                     Text(":").foregroundStyle(.white.opacity(0.6)).font(.title2.weight(.bold))
-                    TimeWheel(label: "s", value: $seconds, range: 0...59)
+                    DragDigit(label: "s", value: $seconds, range: 0...59)
                 }
                 .onChange(of: hours) { updateDuration() }
                 .onChange(of: minutes) { updateDuration() }
@@ -132,66 +132,153 @@ private struct PresetPill: View {
     }
 }
 
-private struct TimeWheel: View {
+/// Click-and-drag digit scrubber. Drag up to increase, down to decrease.
+/// Uses NSView to capture mouse events before the window's move handler.
+private struct DragDigit: View {
     let label: String
     @Binding var value: Int
     let range: ClosedRange<Int>
 
+    @State private var isDragging = false
+
     var body: some View {
         VStack(spacing: 2) {
-            Text(String(format: "%02d", value))
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 36)
-                .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.1)))
-                .onScrollWheel { delta in
-                    let newValue = value - Int(delta)
-                    value = min(range.upperBound, max(range.lowerBound, newValue))
-                }
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.white.opacity(isDragging ? 0.25 : 0.1))
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(.white.opacity(isDragging ? 0.4 : 0), lineWidth: 1)
+
+                Text(String(format: "%02d", value))
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .allowsHitTesting(false)
+
+                // NSView overlay that captures all mouse events
+                DragDigitControl(
+                    value: $value,
+                    isDragging: $isDragging,
+                    range: range
+                )
+            }
+            .frame(width: 44, height: 36)
+            .animation(.easeOut(duration: 0.15), value: isDragging)
 
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.white.opacity(isDragging ? 0.7 : 0.4))
+        }
+        .onHover { inside in
+            if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
         }
     }
 }
 
-// Scroll wheel detection for time picker
-struct ScrollWheelModifier: ViewModifier {
-    let handler: (CGFloat) -> Void
+/// NSViewRepresentable that intercepts mouse events for digit scrubbing,
+/// preventing them from reaching the window's isMovableByWindowBackground handler.
+private struct DragDigitControl: NSViewRepresentable {
+    @Binding var value: Int
+    @Binding var isDragging: Bool
+    let range: ClosedRange<Int>
 
-    func body(content: Content) -> some View {
-        content.background(
-            ScrollWheelReceiver(handler: handler)
-        )
-    }
-}
-
-struct ScrollWheelReceiver: NSViewRepresentable {
-    let handler: (CGFloat) -> Void
-
-    func makeNSView(context: Context) -> ScrollWheelNSView {
-        let view = ScrollWheelNSView()
-        view.handler = handler
+    func makeNSView(context: Context) -> DragDigitNSView {
+        let view = DragDigitNSView()
+        view.coordinator = context.coordinator
         return view
     }
 
-    func updateNSView(_ nsView: ScrollWheelNSView, context: Context) {
-        nsView.handler = handler
+    func updateNSView(_ nsView: DragDigitNSView, context: Context) {
+        context.coordinator.value = $value
+        context.coordinator.isDragging = $isDragging
+        context.coordinator.range = range
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(value: $value, isDragging: $isDragging, range: range)
+    }
+
+    class Coordinator {
+        var value: Binding<Int>
+        var isDragging: Binding<Bool>
+        var range: ClosedRange<Int>
+
+        private var startY: CGFloat = 0
+        private var startValue: Int = 0
+        private var didDrag = false
+        private let pointsPerUnit: CGFloat = 8
+
+        init(value: Binding<Int>, isDragging: Binding<Bool>, range: ClosedRange<Int>) {
+            self.value = value
+            self.isDragging = isDragging
+            self.range = range
+        }
+
+        func mouseDown(at point: NSPoint) {
+            startY = point.y
+            startValue = value.wrappedValue
+            didDrag = false
+        }
+
+        func mouseDragged(at point: NSPoint) {
+            if !isDragging.wrappedValue {
+                isDragging.wrappedValue = true
+            }
+            didDrag = true
+
+            // macOS Y: up is positive, so drag up = increase
+            let delta = point.y - startY
+            let steps = Int(delta / pointsPerUnit)
+            let newValue = startValue + steps
+            value.wrappedValue = clampWrapping(newValue)
+        }
+
+        func mouseUp() {
+            isDragging.wrappedValue = false
+            if !didDrag {
+                // Click without drag: increment by 1
+                value.wrappedValue = clampWrapping(value.wrappedValue + 1)
+            }
+        }
+
+        func scrollWheel(deltaY: CGFloat) {
+            let newValue = value.wrappedValue + Int(deltaY)
+            value.wrappedValue = min(range.upperBound, max(range.lowerBound, newValue))
+        }
+
+        private func clampWrapping(_ v: Int) -> Int {
+            let span = range.upperBound - range.lowerBound + 1
+            var result = v
+            while result > range.upperBound { result -= span }
+            while result < range.lowerBound { result += span }
+            return result
+        }
     }
 }
 
-class ScrollWheelNSView: NSView {
-    var handler: ((CGFloat) -> Void)?
+fileprivate class DragDigitNSView: NSView {
+    weak var coordinator: DragDigitControl.Coordinator?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    // Prevent the window from starting a move when clicking this view
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func mouseDown(with event: NSEvent) {
+        let loc = convert(event.locationInWindow, from: nil)
+        coordinator?.mouseDown(at: loc)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let loc = convert(event.locationInWindow, from: nil)
+        coordinator?.mouseDragged(at: loc)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        coordinator?.mouseUp()
+    }
 
     override func scrollWheel(with event: NSEvent) {
-        handler?(event.deltaY)
-    }
-}
-
-extension View {
-    func onScrollWheel(_ handler: @escaping (CGFloat) -> Void) -> some View {
-        modifier(ScrollWheelModifier(handler: handler))
+        coordinator?.scrollWheel(deltaY: event.deltaY)
     }
 }

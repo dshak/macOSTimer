@@ -4,61 +4,48 @@ struct GradientBackground: View {
     let palette: GradientPalette
     let progress: Double
 
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            GradientCanvas(
-                palette: palette,
-                progress: progress,
-                time: timeline.date.timeIntervalSinceReferenceDate
-            )
-        }
-    }
-}
-
-private struct GradientCanvas: View {
-    let palette: GradientPalette
-    let progress: Double
-    let time: TimeInterval
+    @State private var rotation1: Double = 0
+    @State private var rotation2: Double = 0
 
     var body: some View {
-        Canvas { ctx, size in
-            let angle1 = time.truncatingRemainder(dividingBy: 30) / 30 * .pi * 2
-            let angle2 = -time.truncatingRemainder(dividingBy: 45) / 45 * .pi * 2
+        let colors = palette.colors(at: progress)
 
-            let colors = palette.colors(at: progress)
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let radius = max(size.width, size.height) * 0.8
-            let rect = Path(CGRect(origin: .zero, size: size))
-
-            // First radial gradient — rotates clockwise
-            let offset1 = CGPoint(
-                x: center.x + cos(angle1) * size.width * 0.15,
-                y: center.y + sin(angle1) * size.height * 0.15
+        ZStack {
+            // Base gradient layer — fills the entire area
+            LinearGradient(
+                colors: [colors[0], colors[1]],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
-            ctx.fill(rect, with: .radialGradient(
-                Gradient(colors: [colors[0], colors[1].opacity(0.6)]),
-                center: offset1, startRadius: 0, endRadius: radius
-            ))
 
-            // Second radial gradient — rotates counter-clockwise, blended
-            let offset2 = CGPoint(
-                x: center.x + cos(angle2) * size.width * 0.2,
-                y: center.y + sin(angle2) * size.height * 0.2
+            // Second layer — slow clockwise rotation
+            LinearGradient(
+                colors: [colors[1].opacity(0.6), colors[2].opacity(0.4)],
+                startPoint: .top,
+                endPoint: .bottom
             )
-            ctx.blendMode = .screen
-            ctx.fill(rect, with: .radialGradient(
-                Gradient(colors: [colors[1].opacity(0.7), colors[2].opacity(0.5)]),
-                center: offset2, startRadius: 0, endRadius: radius * 0.9
-            ))
+            .rotationEffect(.degrees(rotation1))
+            .scaleEffect(1.5) // oversized so rotation doesn't show corners
+            .blendMode(.screen)
 
-            // Third subtle overlay for depth
-            ctx.blendMode = .normal
-            ctx.fill(rect, with: .radialGradient(
-                Gradient(colors: [colors[2].opacity(0.3), .clear]),
-                center: CGPoint(x: size.width * 0.8, y: size.height * 0.2),
-                startRadius: 0, endRadius: radius * 0.6
-            ))
+            // Third layer — slow counter-clockwise
+            RadialGradient(
+                colors: [colors[2].opacity(0.3), .clear],
+                center: .topTrailing,
+                startRadius: 0,
+                endRadius: 300
+            )
+            .rotationEffect(.degrees(rotation2))
+            .scaleEffect(1.5)
         }
-        .drawingGroup()
+        .clipped()
+        .onAppear {
+            withAnimation(.linear(duration: 30).repeatForever(autoreverses: false)) {
+                rotation1 = 360
+            }
+            withAnimation(.linear(duration: 45).repeatForever(autoreverses: false)) {
+                rotation2 = -360
+            }
+        }
     }
 }

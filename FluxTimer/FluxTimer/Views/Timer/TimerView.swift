@@ -9,15 +9,16 @@ struct TimerView: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var isHovered = false
     @State private var flashOpacity: Double = 0
-    @State private var urgencyScale: CGFloat = 1.0
     @State private var isEditingLabel = false
     @State private var editLabelText = ""
 
     // Urgency tier: 0 = normal, 1 = last 25%, 2 = last 10%, 3 = last 10 seconds
     private var urgencyTier: Int {
-        guard model.mode == .countdown, model.configuredDuration > 0, model.state == .running else { return 0 }
-        let pct = model.remaining / model.configuredDuration
-        if model.remaining <= 10 { return 3 }
+        guard model.mode == .countdown, model.configuredDuration > 0,
+              model.state == .running, model.displaySeconds > 0 else { return 0 }
+        let remainingSec = Double(model.displaySeconds)
+        let pct = remainingSec / model.configuredDuration
+        if remainingSec <= 10 { return 3 }
         if pct <= 0.10 { return 2 }
         if pct <= 0.25 { return 1 }
         return 0
@@ -43,9 +44,10 @@ struct TimerView: View {
                     Spacer(minLength: 6)
 
                     // Timer digits — tap to pause/resume
-                    TimerDisplayView(model: model)
-                        .scaleEffect(urgencyScale)
-                        .contentShape(Rectangle())
+                    UrgencyPulseWrapper(tier: urgencyTier) {
+                        TimerDisplayView(model: model)
+                    }
+                    .contentShape(Rectangle())
                         .onTapGesture {
                             if model.state == .running {
                                 engine.pause()
@@ -97,17 +99,11 @@ struct TimerView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-            // Close button (top-right, on hover)
-            if isHovered && model.state != .setup {
-                VStack {
-                    HStack {
-                        Spacer()
-                        CloseButton(action: onClose)
-                    }
-                    Spacer()
-                }
-                .padding(6)
-            }
+            // Close button — positioned absolutely in top-right
+            NativeCloseButton(action: onClose)
+                .frame(width: 20, height: 20)
+                .position(x: 240 - 16, y: 16)
+
         }
         .frame(width: 240, height: model.state == .setup ? 220 : 120)
         .opacity(settings.windowOpacity)
@@ -122,29 +118,6 @@ struct TimerView: View {
                 triggerFlash()
             }
         }
-        // Urgency pulse animation
-        .onChange(of: urgencyTier) { _, tier in
-            urgencyScale = 1.0
-            switch tier {
-            case 1:
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    urgencyScale = 1.02
-                }
-            case 2:
-                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                    urgencyScale = 1.03
-                }
-            case 3:
-                withAnimation(.easeInOut(duration: 0.15).repeatForever(autoreverses: true)) {
-                    urgencyScale = 1.05
-                }
-            default:
-                withAnimation(.easeOut(duration: 0.2)) {
-                    urgencyScale = 1.0
-                }
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: model.state)
         .contextMenu { contextMenuContent }
     }
 
@@ -195,7 +168,7 @@ struct TimerView: View {
         }
 
         Button("Preferences...") {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            (NSApp.delegate as? AppDelegate)?.showSettings()
         }
     }
 
@@ -216,19 +189,85 @@ struct TimerView: View {
     }
 }
 
+/// Wraps content with a scale pulse driven by TimelineView — only active when urgency tier > 0.
+/// No `.repeatForever` animations — the pulse is computed from wall-clock time, so it
+/// starts and stops cleanly with zero cancellation issues.
+private struct UrgencyPulseWrapper<Content: View>: View {
+    let tier: Int
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if tier > 0 {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                content()
+                    .scaleEffect(scale(for: timeline.date))
+            }
+        } else {
+            content()
+        }
+    }
+
+    private func scale(for date: Date) -> CGFloat {
+        let t = date.timeIntervalSinceReferenceDate
+        let amplitude: CGFloat
+        let frequency: Double
+        switch tier {
+        case 1: amplitude = 0.02; frequency = 0.5
+        case 2: amplitude = 0.03; frequency = 0.83
+        case 3: amplitude = 0.05; frequency = 3.3
+        default: return 1.0
+        }
+        return 1.0 + amplitude * CGFloat(sin(t * .pi * 2 * frequency))
+    }
+}
+
+/// Close button backed by NSView so clicks aren't swallowed by isMovableByWindowBackground
 private struct CloseButton: View {
     let action: () -> Void
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
+        ZStack {
+            Circle().fill(.black.opacity(isHovered ? 0.5 : 0.3))
             Image(systemName: "xmark")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white.opacity(isHovered ? 0.9 : 0.5))
-                .frame(width: 18, height: 18)
-                .background(Circle().fill(.black.opacity(isHovered ? 0.4 : 0.2)))
+                .foregroundStyle(.white.opacity(isHovered ? 1.0 : 0.6))
+                .allowsHitTesting(false)
+            ClickReceiver(action: action)
         }
-        .buttonStyle(.plain)
+        .frame(width: 18, height: 18)
         .onHover { isHovered = $0 }
+    }
+}
+
+/// NSView that captures clicks and prevents window drag
+private struct ClickReceiver: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> ClickReceiverNSView {
+        let view = ClickReceiverNSView()
+        view.action = action
+        return view
+    }
+
+    func updateNSView(_ nsView: ClickReceiverNSView, context: Context) {
+        nsView.action = action
+    }
+}
+
+fileprivate class ClickReceiverNSView: NSView {
+    var action: (() -> Void)?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func mouseDown(with event: NSEvent) {
+        // Don't forward to super — prevents window drag
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let loc = convert(event.locationInWindow, from: nil)
+        if bounds.contains(loc) {
+            action?()
+        }
     }
 }

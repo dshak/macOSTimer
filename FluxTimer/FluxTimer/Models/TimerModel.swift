@@ -20,11 +20,17 @@ class TimerModel: ObservableObject, Identifiable {
     @Published var mode: TimerMode
     @Published var state: TimerState = .setup
     @Published var configuredDuration: TimeInterval
-    @Published var elapsed: TimeInterval = 0
     @Published var label: String
     @Published var alerts: AlertConfiguration
     @Published var palette: GradientPalette
     @Published var themeMode: ThemeMode = .gradient
+
+    /// Only published when the displayed second changes — drives UI updates
+    @Published var displaySeconds: Int = 0
+
+    /// Precise elapsed time — updated frequently but NOT @Published to avoid view churn.
+    /// Read this for MCP queries and session logging. UI reads displaySeconds instead.
+    var elapsed: TimeInterval = 0
 
     var startedAt: Date?
 
@@ -60,14 +66,15 @@ class TimerModel: ObservableObject, Identifiable {
     }
 
     var shortFormattedTime: String {
-        let t = displayTime
-        let hours = Int(t) / 3600
-        let minutes = (Int(t) % 3600) / 60
-        let seconds = Int(t) % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        }
-        return String(format: "%02d:%02d", minutes, seconds)
+        formattedTime
+    }
+
+    /// Whether we need high-frequency updates (centiseconds visible or final urgency)
+    var needsHighFrequency: Bool {
+        guard state == .running else { return false }
+        if AppSettings.shared.showCentiseconds { return true }
+        if mode == .countdown && remaining <= 10 { return true }
+        return false
     }
 
     init(

@@ -116,8 +116,7 @@ class StatusBarController {
     }
 
     @objc private func preferencesClicked() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        (NSApp.delegate as? AppDelegate)?.showSettings()
     }
 
     @objc private func quitClicked() {
